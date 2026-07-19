@@ -58,18 +58,18 @@ class TesseractHierarchicalEngine:
             block_bbox = BoundingBox(x=b_xmin, y=b_ymin, w=b_xmax-b_xmin, h=b_ymax-b_ymin)
             
             paragraphs = []
-            for par_id, par_data in block_data.groupby('par_num'):
-                # Calculate paragraph bbox from its words
-                p_xmin = par_data['left'].min()
-                p_ymin = par_data['top'].min()
-                p_xmax = (par_data['left'] + par_data['width']).max()
-                p_ymax = (par_data['top'] + par_data['height']).max()
+            for (par_id, line_id), line_data in block_data.groupby(['par_num', 'line_num']):
+                # Calculate line bbox from its words
+                p_xmin = line_data['left'].min()
+                p_ymin = line_data['top'].min()
+                p_xmax = (line_data['left'] + line_data['width']).max()
+                p_ymax = (line_data['top'] + line_data['height']).max()
                 par_bbox = BoundingBox(x=p_xmin, y=p_ymin, w=p_xmax-p_xmin, h=p_ymax-p_ymin)
                 
                 # In Tesseract, confidence is per word
                 words = []
                 confidences = []
-                for _, row in par_data.iterrows():
+                for _, row in line_data.iterrows():
                     w_bbox = BoundingBox(x=row['left'], y=row['top'], w=row['width'], h=row['height'])
                     text = str(row['text']).strip()
                     conf = float(row['conf'])
