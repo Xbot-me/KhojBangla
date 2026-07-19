@@ -58,7 +58,7 @@ def sync_to_vector_db():
                 ids=[result_id]
             )
 
-tab1, tab2 = st.tabs(["Review Queue", "Search Archive"])
+tab1, tab2, tab3 = st.tabs(["Review Queue", "Search Archive", "Process New Issue"])
 
 with tab1:
     st.title("Human Verification Queue")
@@ -146,3 +146,41 @@ with tab2:
                     st.divider()
             else:
                 st.warning("No results found.")
+
+with tab3:
+    st.title("Process New Issue")
+    st.markdown("Select a date to fetch and process a historical newspaper issue.")
+    
+    selected_date = st.date_input("Newspaper Date")
+    
+    if st.button("Download & Process"):
+        st.info(f"Triggering pipeline for {selected_date}...")
+        
+        # Simulate downloading or selecting the correct file
+        # For demonstration, we fall back to the 1980_jan1 file if available
+        import subprocess
+        
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # Target image mapping
+        target_img = os.path.join(project_root, "downloads", "1980_jan1_pg1.jpg")
+        
+        if not os.path.exists(target_img):
+            st.error("Crawler integration pending: Could not download the issue for this date.")
+        else:
+            with st.spinner("Running OCR Pipeline... This may take a few minutes."):
+                pipeline_script = os.path.join(project_root, "banglaocr", "pipeline.py")
+                db_target = os.path.join(project_root, "banglaocr", "ocr.db")
+                
+                # Run the pipeline synchronously for the demo
+                result = subprocess.run(
+                    [sys.executable, pipeline_script, target_img, db_target],
+                    capture_output=True, text=True
+                )
+                
+                if result.returncode == 0:
+                    st.success("Pipeline completed! Switch to the Review Queue tab to verify.")
+                    st.code(result.stdout)
+                else:
+                    st.error("Pipeline failed.")
+                    st.code(result.stderr)
+

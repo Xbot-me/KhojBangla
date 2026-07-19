@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  bangla-ocr:
+    build: .
+    container_name: bangla-ocr-pipeline
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./downloads:/app/downloads
+      - ./chroma_db:/app/chroma_db
+      - ocr_db_volume:/app/banglaocr/ocr.db
+      - hf_cache:/app/.cache/huggingface
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  ocr_db_volume:
+  hf_cache:

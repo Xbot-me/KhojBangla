@@ -1,0 +1,12 @@
+.git/
+.gitignore
+venv/
+crawl_venv/
+__pycache__/
+.cache/
+hf_cache/
+*.db
+*.sqlite3
+chroma_db/
+downloads/
+.streamlit/
