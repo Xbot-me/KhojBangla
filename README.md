@@ -42,17 +42,43 @@ locally. After that, `get_available_engines()` in `ocr_engines.py` will pick up
 Surya automatically and the pipeline will prefer it over Tesseract, using
 Tesseract only as the disagreement cross-check.
 
-## Running it
+## Getting Started (Docker Recommended) 🐳
+
+The easiest way to run the entire pipeline (UI + Database + OCR engines) is using Docker, which prevents dependency issues with Tesseract, Poppler, and OpenCV.
+
+```bash
+docker-compose up --build
+```
+
+This will automatically:
+1. Build the Python 3.11 environment with all system dependencies.
+2. Spin up the Streamlit UI on `http://localhost:8501`.
+3. Mount the databases and HuggingFace cache locally so your work is saved.
+
+## Running Manually (Without Docker)
 
 ```bash
 pip install -r requirements.txt
 # Bengali tesseract language pack + fonts (Debian/Ubuntu):
-sudo apt-get install tesseract-ocr-ben fonts-beng
+sudo apt-get install tesseract-ocr-ben fonts-beng poppler-utils
 
-cd banglaocr
-python3 pipeline.py /path/to/scanned_page.png output.db
-python3 review_queue.py output.db
+# Start the Streamlit Web App
+streamlit run banglaocr/app.py
 ```
+
+## Streamlit UI & Pipeline Trigger
+
+The Streamlit UI provides 3 main tabs:
+1. **Review Queue**: Verify low-confidence OCR results side-by-side with cropped image segments.
+2. **Search Archive**: Perform semantic vector search queries in Bengali across your verified historical database.
+3. **Process New Issue**: A Date Selector to trigger the background OCR pipeline on a specific newspaper issue.
+
+## CI/CD ⚙️
+
+This repository includes a GitHub Actions workflow `.github/workflows/ci.yml`. On every push to the `main` branch, it automatically:
+- Installs Tesseract and system dependencies on an Ubuntu runner.
+- Runs the test suite to catch breakages.
+- Validates the Docker image build.
 
 ## Tuning knobs worth knowing about
 
