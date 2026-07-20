@@ -64,10 +64,10 @@ def process_page(image_path: str, config: PipelineConfig, source_url: str | None
 
     # We will use whichever engine is available that provides hierarchical layout (process_page returns list[TextBlock])
     hierarchical_engine = None
-    if "hybrid" in engines:
-        hierarchical_engine = engines["hybrid"]
-    elif "tesseract" in engines:
+    if "tesseract" in engines:
         hierarchical_engine = engines["tesseract"]
+    elif "hybrid" in engines:
+        hierarchical_engine = engines["hybrid"]
     elif "google_vision" in engines:
         hierarchical_engine = engines["google_vision"]
 
