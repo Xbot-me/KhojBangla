@@ -15,6 +15,43 @@ def load_grayscale(path: str) -> np.ndarray:
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
 
+def crop_borders(gray: np.ndarray, margin: float = 0.05) -> np.ndarray:
+    """
+    Remove dark borders/rulers from edges.
+    Applies adaptive thresholding and finds the largest central bounding box.
+    """
+    # Create adaptive threshold as suggested
+    bw = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 15
+    )
+    
+    # Projection profiles to find the content area
+    row_sum = np.sum(bw, axis=1)
+    col_sum = np.sum(bw, axis=0)
+    
+    h, w = gray.shape
+    h_m, w_m = int(h * margin), int(w * margin)
+    
+    # 5% threshold of max row/col density
+    row_thresh = np.max(row_sum[h_m:h-h_m]) * 0.05
+    col_thresh = np.max(col_sum[w_m:w-w_m]) * 0.05
+    
+    valid_rows = np.where(row_sum > row_thresh)[0]
+    valid_cols = np.where(col_sum > col_thresh)[0]
+    
+    if len(valid_rows) == 0 or len(valid_cols) == 0:
+        return gray
+        
+    y_min, y_max = max(0, valid_rows[0] - 10), min(h, valid_rows[-1] + 10)
+    x_min, x_max = max(0, valid_cols[0] - 10), min(w, valid_cols[-1] + 10)
+    
+    # Fallback if crop is too aggressive
+    if (y_max - y_min) < h * 0.5 or (x_max - x_min) < w * 0.5:
+        return gray
+        
+    return gray[y_min:y_max, x_min:x_max]
+
+
 def denoise(gray: np.ndarray) -> np.ndarray:
     """Remove scan noise / foxing spots while preserving text edges."""
     return cv2.fastNlMeansDenoising(gray, h=10, templateWindowSize=7, searchWindowSize=21)
@@ -22,7 +59,7 @@ def denoise(gray: np.ndarray) -> np.ndarray:
 
 def enhance_contrast(gray: np.ndarray) -> np.ndarray:
     """CLAHE: brings out faded ink without blowing out bright paper background."""
-    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     return clahe.apply(gray)
 
 
@@ -75,6 +112,7 @@ def upscale(gray: np.ndarray, scale: float = 2.0) -> np.ndarray:
 
 def preprocess_page(
     path: str,
+    do_crop: bool = True,
     do_denoise: bool = True,
     do_contrast: bool = True,
     do_deskew: bool = True,
@@ -84,6 +122,8 @@ def preprocess_page(
     """Full preprocessing chain. Returns a clean grayscale image ready for segmentation."""
     gray = load_grayscale(path)
 
+    if do_crop:
+        gray = crop_borders(gray)
     if do_upscale:
         gray = upscale(gray, upscale_factor)
     if do_denoise:

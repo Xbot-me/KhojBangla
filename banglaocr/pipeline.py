@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 from ocr_engines import get_available_engines, OcrLineResult
 from preprocess import preprocess_page
-from segment import segment_page
+from segment import chunk_into_columns, segment_page
 import storage
 
 
@@ -72,30 +72,51 @@ def process_page(image_path: str, config: PipelineConfig, source_url: str | None
         hierarchical_engine = engines["google_vision"]
 
     if hierarchical_engine:
-        # NEW PIPELINE: Use hierarchical layout extraction (Tesseract TSV or Google Vision)
+        # NEW PIPELINE: Use hierarchical layout extraction per column
         import layout_parser as layout
-        print(f"[page {page_id}] Using {hierarchical_engine.name} for hierarchical layout and OCR")
-        blocks = hierarchical_engine.process_page(processed)
         
-        filtered_blocks = layout.filter_ads(blocks)
-        articles = layout.group_articles(filtered_blocks)
-        
-        for col_idx, article in enumerate(articles):
-            line_idx = 0
-            for block in article:
+        print(f"[page {page_id}] Segmenting into columns for {hierarchical_engine.name}...")
+        columns = chunk_into_columns(processed)
+        if not columns:
+            # Fallback if no columns detected
+            columns = [{"column_index": 0, "bbox": type('obj', (object,), {'x': 0, 'y': 0, 'w': processed.shape[1], 'h': processed.shape[0]})(), "image": processed}]
+            
+        total_articles = 0
+        for col in columns:
+            col_img = col["image"]
+            col_offset_x = getattr(col["bbox"], "x", 0)
+            col_offset_y = getattr(col["bbox"], "y", 0)
+            
+            blocks = hierarchical_engine.process_page(col_img)
+            
+            # Adjust bounding boxes to global page coordinates
+            for block in blocks:
+                block.bbox.x += col_offset_x
+                block.bbox.y += col_offset_y
                 for para in block.paragraphs:
-                    line_crop_id = storage.insert_line_crop(
-                        config.db_path, page_id, column_index=col_idx, line_index=line_idx, bbox=para.bbox
-                    )
-                    
-                    if para.confidence >= config.min_confidence:
-                        _mark_accepted(config.db_path, line_crop_id, hierarchical_engine.name, para.text, para.confidence)
-                    else:
-                        _mark_needs_review(config.db_path, line_crop_id, hierarchical_engine.name, para.text, para.confidence)
+                    para.bbox.x += col_offset_x
+                    para.bbox.y += col_offset_y
+            
+            filtered_blocks = layout.filter_ads(blocks)
+            articles = layout.group_articles(filtered_blocks)
+            
+            for art_idx, article in enumerate(articles):
+                line_idx = 0
+                for block in article:
+                    for para in block.paragraphs:
+                        line_crop_id = storage.insert_line_crop(
+                            config.db_path, page_id, column_index=col["column_index"], line_index=line_idx, bbox=para.bbox
+                        )
                         
-                    line_idx += 1
-                    
-        print(f"[page {page_id}] Processed {len(articles)} articles using {hierarchical_engine.name}.")
+                        if para.confidence >= config.min_confidence:
+                            _mark_accepted(config.db_path, line_crop_id, hierarchical_engine.name, para.text, para.confidence)
+                        else:
+                            _mark_needs_review(config.db_path, line_crop_id, hierarchical_engine.name, para.text, para.confidence)
+                            
+                        line_idx += 1
+                total_articles += 1
+                
+        print(f"[page {page_id}] Processed {total_articles} articles using {hierarchical_engine.name}.")
         return page_id
 
     # OLD PIPELINE (Fallback to Surya or manual segmentation + Tesseract Line-by-line)

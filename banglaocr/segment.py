@@ -135,6 +135,30 @@ def segment_page(
     return results
 
 
+def chunk_into_columns(
+    gray: np.ndarray,
+    min_column_gap_px: int = 25,
+    min_column_width_px: int = 40,
+) -> list[dict]:
+    """
+    Slices the page into strictly vertical column images to prevent cross-column bleeding in OCR.
+    Returns: [{"column_index": int, "bbox": BoundingBox, "image": np.ndarray}]
+    """
+    columns = detect_columns(gray, min_gap_px=min_column_gap_px)
+    columns = [c for c in columns if c.w >= min_column_width_px]
+
+    results = []
+    for col_idx, col_box in enumerate(columns):
+        results.append(
+            {
+                "column_index": col_idx,
+                "bbox": col_box,
+                "image": col_box.crop(gray),
+            }
+        )
+    return results
+
+
 if __name__ == "__main__":
     import sys
 
