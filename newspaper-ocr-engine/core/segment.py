@@ -26,10 +26,44 @@ class DocumentSegmenter:
         Converts polygons to Minimum Bounding Rectangles (MBR).
         Sorts boxes top-to-bottom, left-to-right.
         """
-        # If model is not loaded, we fallback to treating the whole image as a single paragraph block for testing purposes.
+        # If model is not loaded, we fallback to morphological contour detection
         if self.model is None:
-            h, w = image.shape[:2]
-            return [{"bbox": [0, 0, w, h], "type": "text", "id": 1}]
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+            # Binarize if not already
+            if gray.max() > 1:
+                # Assuming background is white, text is black. We need text to be white for dilation.
+                if gray.mean() > 127:
+                    gray = cv2.bitwise_not(gray)
+                _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            else:
+                thresh = (gray * 255).astype(np.uint8)
+
+            # Morphological dilation to connect text into blocks. 
+            # We want to connect words horizontally (large width) and lines vertically (small/medium height)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 10))
+            dilated = cv2.dilate(thresh, kernel, iterations=2)
+            
+            # Find contours of these text blocks
+            contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            paragraphs = []
+            h_img, w_img = image.shape[:2]
+            
+            for i, cnt in enumerate(contours):
+                x, y, w, h = cv2.boundingRect(cnt)
+                
+                # Filter out obvious noise or watermarks (too small)
+                if w > 50 and h > 20:
+                    paragraphs.append({
+                        "id": i + 1,
+                        "bbox": [x, y, x + w, y + h],
+                        "type": "text"
+                    })
+                    
+            # Sort paragraphs top-to-bottom, left-to-right
+            paragraphs.sort(key=lambda p: (p["bbox"][1] // 100, p["bbox"][0]))
+            
+            return paragraphs
             
         # Convert grayscale (if passed) to RGB for YOLO
         if len(image.shape) == 2:
